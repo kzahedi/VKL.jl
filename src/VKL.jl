@@ -5,7 +5,7 @@ using Shannon
 export vdp_t
 export draw_data_points_uniform, draw_data_points_normal
 export add_sample_to_data!
-export p_by_counts, p_by_volume
+export p_by_counts, p_by_paper, p_by_decay
 
 type vdp_t
   point::Vector{Float64}
@@ -39,12 +39,9 @@ function add_sample_to_data!(
   p::Vector{Float64}, data::Vector{vdp_t})
   m = sqrt(sum((p - data[1].point).^2))
   c = data[1]
-  #= println(m) =#
   for d in data[2:end]
     t = sqrt(sum((p - d.point).^2))
-    #= println(t) =#
     if t < m
-      #= println("selected") =#
       c = d
       m = t
     end
@@ -63,7 +60,28 @@ end
 
 fx(counts::Int64, N::Int64, dim::Int64)    = (counts > 0 ? (N / (counts * dim)) : 0)
 p_by_counts(data::Vector{vdp_t}, N::Int64) = [d.n / N for d in data]
-p_by_volume(data::Vector{vdp_t}, N::Int64) = [fx(d.n, N, length(data)) for d in data]
+p_by_paper(data::Vector{vdp_t}, N::Int64)  = [fx(d.n, N, length(data)) for d in data]
+function p_by_decay(data::Vector{vdp_t}, N::Int64)
+  N = size(data)[1]
+  n = sum([d.n for d in data])
+  p = ones(N) ./ N
+  i = 0
+  index = 0
+  for d in data
+    index = index + 1
+    for points in d.points
+      i = i + 1
+      diff = (1 - 1.0 / (1.0 + i)) * p[index]
+      p[index] = p[index] - diff
+      for j=1:N
+        if j != index
+          p[j] = p[j] + diff / (N-1)
+        end
+      end
+    end
+  end
+  p
+end
 
 function get_avg(dimension::Int64, nr_of_data_points::Int64,
                              nr_of_samples::Int64, repeats::Int64)
@@ -186,8 +204,5 @@ function uniform_sampling!(
     add_sample_to_data!(p, data)
   end
 end
-
-
-# package code goes here
 
 end # module
