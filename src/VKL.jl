@@ -6,6 +6,7 @@ export vdp_t
 export draw_data_points_uniform, draw_data_points_normal
 export add_sample_to_data!
 export p_by_counts, p_by_paper, p_by_decay
+export get_avg
 
 type vdp_t
   point::Vector{Float64}
@@ -86,9 +87,9 @@ end
 function get_avg(dimension::Int64, nr_of_data_points::Int64,
                              nr_of_samples::Int64, repeats::Int64)
   diffs = zeros(nr_of_samples, repeats)
-  q = [1.0/length(data) for d in data]
   for i=1:repeats
-    data = draw_random_data_points(nr_of_data_points, dimension)
+    data = draw_data_points_uniform(nr_of_data_points, dimension)
+    q = [1.0/length(data) for d in data]
     for j = 1:nr_of_samples
       point = rand(dimension)
       add_sample_to_data!(point , data)
@@ -96,6 +97,7 @@ function get_avg(dimension::Int64, nr_of_data_points::Int64,
       diffs[j,i] = KL(p,q)
     end
   end
+  println("Done with $dimension, $nr_of_data_points $nr_of_samples")
   mean(diffs,2)
 end
 
@@ -105,7 +107,7 @@ function get_nr_of_required_samples(
   q = [1.0/length(data) for d in data]
 
   s = @parallel (+) for i=1:repeats
-    data = draw_random_data_points(nr_of_data_points, dimension)
+    data = draw_data_points_uniform(nr_of_data_points, dimension)
     r = nr_of_samples
     for j = 1:nr_of_samples
       point = rand(dimension)
@@ -129,8 +131,8 @@ end
 function calculate_avg_data()
   avg_data = []
 
-  dimensions        = [50:50:200]
-  nr_of_data_points = [200:200:8000]
+  dimensions        = [50:10:200]
+  nr_of_data_points = [200:100:8000]
   repeats           = 10
   sample_sizes      = [10000]
 
@@ -138,24 +140,28 @@ function calculate_avg_data()
   m = n * repeats
 
   println("Running $m experiments in total.")
-  pm = Progress(n, 1)
+  #= pm = Progress(n, 1) =#
 
+  s = []
   for dim in dimensions
     for i in sample_sizes
-      r = []
       for j in nr_of_data_points
-        d = get_avg(dim, j, i, repeats)
-        next!(pm)
-        if r == []
-          r = d
-        else
-          r = hcat(r, d)
-        end
-        next!(pm)
+        s = [s, @spawn get_avg(dim, j, i, repeats)]
       end
-      writedlm("data/results_dim_$dim\_sample_sizes_$i.txt",r,',')
     end
   end
+  v = []
+  for r in s
+    d = fetch(r)
+    #= next!(pm) =#
+    if v == []
+      v = d
+    else
+      v = hcat(v, d)
+    end
+  end
+
+  writedlm("data/results_dim_$dim\_sample_sizes_$i.txt",v,',')
 end
 
 function calculate_avg_nr_of_required_samples(max::Int64, limit::Float64,
